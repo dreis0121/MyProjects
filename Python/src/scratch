@@ -1,8 +1,0 @@
-my_dictionary = {'cows': 3,'pigs': 4, 'chickens':10}
-
-my_dictionary['cows'] = {}
-
-for value in my_dictionary.values():
-    print(value)
-
-print(5/2)
