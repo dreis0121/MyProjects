@@ -1,0 +1,112 @@
+CREATE OR REPLACE DATABASE PRODUCT_DB;
+CREATE OR REPLACE SCHEMA PRODUCT_DATA;
+
+USE DATABASE PRODUCT_DB;
+USE SCHEMA PRODUCT_DATA;
+
+CREATE OR REPLACE TABLE product_src
+(
+PRODUCTID STRING,
+
+PRODUCTNAME STRING,
+
+CATEGORY STRING,
+
+PRICE FLOAT,
+
+STOCKQUANTITY FLOAT,
+
+SUPPLIER STRING,
+
+RATING FLOAT
+);
+
+CREATE OR REPLACE TABLE product_tgt
+(
+PRODUCTID STRING,
+
+PRODUCTNAME STRING,
+
+CATEGORY STRING,
+
+PRICE FLOAT,
+
+STOCKQUANTITY FLOAT,
+
+SUPPLIER STRING,
+
+RATING FLOAT
+);
+
+CREATE OR REPLACE STREAM product_stream ON TABLE product_src;
+
+CREATE OR REPLACE TASK PRODUCT_DB.PRODUCT_DATA.PRODUCT_TASK
+WAREHOUSE = compute_wh
+SCHEDULE = '1 MINUTE'
+AS
+MERGE INTO PRODUCT_DB.PRODUCT_DATA.PRODUCT_TGT AS T
+USING (
+    SELECT
+        PRODUCTID,
+        PRODUCTNAME,
+        CATEGORY,
+        PRICE,
+        STOCKQUANTITY,
+        SUPPLIER,
+        RATING
+    FROM PRODUCT_DB.PRODUCT_DATA.PRODUCT_STREAM
+) AS S
+ON T.PRODUCTID = S.PRODUCTID
+
+WHEN MATCHED THEN
+    UPDATE SET
+        T.PRODUCTNAME   = S.PRODUCTNAME,
+        T.CATEGORY      = S.CATEGORY,
+        T.PRICE         = S.PRICE,
+        T.STOCKQUANTITY = S.STOCKQUANTITY,
+        T.SUPPLIER      = S.SUPPLIER,
+        T.RATING        = S.RATING
+
+WHEN NOT MATCHED THEN
+    INSERT (
+        PRODUCTID,
+        PRODUCTNAME,
+        CATEGORY,
+        PRICE,
+        STOCKQUANTITY,
+        SUPPLIER,
+        RATING
+    )
+    VALUES (
+        S.PRODUCTID,
+        S.PRODUCTNAME,
+        S.CATEGORY,
+        S.PRICE,
+        S.STOCKQUANTITY,
+        S.SUPPLIER,
+        S.RATING
+    );
+
+SHOW tasks;
+
+CREATE OR REPLACE STAGE product_db.product_data.product_stage;
+
+LIST @product_stage;
+
+COPY INTO product_db.product_data.product_src
+FROM @product_stage
+FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1);
+
+ALTER TASK product_task RESUME;
+
+SELECT * FROM TABLE (INFORMATION_SCHEMA.TASK_HISTORY(TASK_NAME=>'product_task'));
+
+
+COPY INTO product_db.product_data.product_src
+FROM @product_stage
+FILES=('product_changedata.csv')
+FILE_FORMAT = (TYPE= 'CSV' SKIP_HEADER=1);
+
+SELECT * FROM product_db.product_data.product_stream;
+
+select * from product_db.product_data.product_tgt;
